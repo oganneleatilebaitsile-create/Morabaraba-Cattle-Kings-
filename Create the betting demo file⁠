@@ -1,0 +1,255 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cattle Kings | Betting Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #101510;
+      color: #f4f0df;
+      font-family: Arial, sans-serif;
+    }
+    main { max-width: 650px; margin: auto; }
+    .card {
+      background: #202820;
+      border: 1px solid #43513c;
+      border-radius: 14px;
+      padding: 18px;
+      margin: 16px 0;
+    }
+    h1 { color: #e6b84b; }
+    h2 { font-size: 19px; }
+    .balance { font-size: 30px; color: #e6b84b; }
+    label { display: block; margin: 12px 0 6px; }
+    input, select, button {
+      width: 100%;
+      padding: 13px;
+      border-radius: 8px;
+      font-size: 16px;
+      margin: 5px 0;
+    }
+    input, select {
+      color: white;
+      background: #121812;
+      border: 1px solid #53634c;
+    }
+    button {
+      background: #d8a735;
+      color: #17170e;
+      font-weight: bold;
+      border: 0;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #394638;
+      color: white;
+    }
+    .note { color: #c4cbbd; font-size: 14px; line-height: 1.5; }
+    #message { white-space: pre-line; line-height: 1.5; }
+    .match {
+      padding: 12px;
+      margin-top: 10px;
+      border: 1px solid #52604b;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🐄 CATTLE KINGS</h1>
+  <p>Morabaraba competitive gaming</p>
+
+  <div class="card">
+    <h2>Practice Wallet</h2>
+    <div class="balance" id="balance">1000 credits</div>
+    <p class="note">Virtual practice credits only. They have no cash value.</p>
+    <button class="secondary" id="reset">Reset practice wallet</button>
+  </div>
+
+  <div class="card">
+    <h2>Create a Practice Match</h2>
+    <label for="stake">Entry stake (virtual credits)</label>
+    <select id="stake">
+      <option value="10">10 credits</option>
+      <option value="25">25 credits</option>
+      <option value="50">50 credits</option>
+      <option value="100">100 credits</option>
+    </select>
+    <button id="create">Create Practice Match</button>
+    <p class="note">This demo reserves your stake locally. It does not connect to another player or process a payment.</p>
+  </div>
+
+  <div class="card">
+    <h2>Practice Match</h2>
+    <div id="match">No active match. Create one to begin.</div>
+    <button class="secondary" id="win" disabled>Test: Settle as Winner</button>
+    <button class="secondary" id="lose" disabled>Test: Settle as Loser</button>
+    <p class="note">Settlement buttons are simulations for testing wallet accounting, not real game results.</p>
+  </div>
+
+  <div class="card">
+    <h2>Activity</h2>
+    <div id="history" class="note">No activity yet.</div>
+    <p id="message" role="status" aria-live="polite"></p>
+  </div>
+</main>
+
+<script>
+(() => {
+  const STARTING_CREDITS = 1000;
+  const STORAGE_KEY = "cattleKingsPracticeV1";
+
+  const $ = id => document.getElementById(id);
+
+  let state = {
+    balance: STARTING_CREDITS,
+    match: null,
+    history: []
+  };
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      $("message").textContent =
+        "Storage is unavailable. Your progress may not persist.";
+    }
+  }
+
+  function load() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return;
+
+      const parsed = JSON.parse(saved);
+
+      if (
+        Number.isSafeInteger(parsed.balance) &&
+        parsed.balance >= 0 &&
+        Array.isArray(parsed.history)
+      ) {
+        state.balance = parsed.balance;
+        state.history = parsed.history.slice(0, 20);
+
+        if (
+          parsed.match &&
+          Number.isSafeInteger(parsed.match.stake) &&
+          parsed.match.stake > 0 &&
+          ["active"].includes(parsed.match.status)
+        ) {
+          state.match = parsed.match;
+        }
+      }
+    } catch (error) {
+      // Keep the fresh practice wallet if saved data is invalid.
+    }
+  }
+
+  function log(text) {
+    state.history.unshift(new Date().toLocaleString() + " — " + text);
+    state.history = state.history.slice(0, 10);
+  }
+
+  function render() {
+    $("balance").textContent = state.balance + " credits";
+
+    $("match").textContent = state.match
+      ? "Practice match active — " + state.match.stake +
+        " credits reserved."
+      : "No active match. Create one to begin.";
+
+    $("win").disabled = !state.match;
+    $("lose").disabled = !state.match;
+
+    $("history").textContent = state.history.length
+      ? state.history.join("\n")
+      : "No activity yet.";
+
+    save();
+  }
+
+  $("create").addEventListener("click", () => {
+    if (state.match) {
+      $("message").textContent =
+        "Finish the current practice match first.";
+      return;
+    }
+
+    const stake = Number($("stake").value);
+
+    if (!Number.isSafeInteger(stake) || stake <= 0) {
+      $("message").textContent = "Choose a valid practice stake.";
+      return;
+    }
+
+    if (stake > state.balance) {
+      $("message").textContent = "Not enough practice credits.";
+      return;
+    }
+
+    state.balance -= stake;
+    state.match = { stake, status: "active" };
+
+    log("Practice match created; " + stake + " credits reserved.");
+    $("message").textContent =
+      "Practice match created. Credits are reserved.";
+    render();
+  });
+
+  function settle(result) {
+    if (!state.match) return;
+
+    const stake = state.match.stake;
+
+    if (result === "win") {
+      // Return the stake plus an equal simulated reward.
+      const payout = stake * 2;
+
+      if (!Number.isSafeInteger(payout) ||
+          !Number.isSafeInteger(state.balance + payout)) {
+        $("message").textContent = "Credit limit reached.";
+        return;
+      }
+
+      state.balance += payout;
+      log("Simulated win: " + payout + " credits returned.");
+      $("message").textContent =
+        "Test settlement complete. Simulated payout: " +
+        payout + " credits.";
+    } else {
+      log("Simulated loss: " + stake + " credits spent.");
+      $("message").textContent =
+        "Test settlement complete. Reserved credits were spent.";
+    }
+
+    state.match = null;
+    render();
+  }
+
+  $("win").addEventListener("click", () => settle("win"));
+  $("lose").addEventListener("click", () => settle("lose"));
+
+  $("reset").addEventListener("click", () => {
+    if (!confirm("Reset all practice credits and activity?")) return;
+
+    state = {
+      balance: STARTING_CREDITS,
+      match: null,
+      history: []
+    };
+
+    $("message").textContent = "Practice wallet reset.";
+    render();
+  });
+
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
