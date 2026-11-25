@@ -1,0 +1,457 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101710">
+<title>Cattle Kings V3.1 - AI Edition</title>
+<style>
+:root {
+ --bg:#101710;--panel:#1c291e;--gold:#e8b84f;
+ --red:#e85c54;--blue:#64b9ed;--text:#f7f4e9;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font-family:Arial,sans-serif}
+header{text-align:center;padding:20px 10px}
+h1{color:var(--gold);margin:0}
+header p{color:#a8b4a4;font-size:13px}
+main{max-width:620px;margin:auto;padding:12px}
+.panel{background:var(--panel);border:1px solid #39483a;
+border-radius:14px;padding:14px;margin-bottom:13px}
+.score{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.player{background:#253328;padding:12px;text-align:center;
+border:2px solid transparent;border-radius:10px}
+.player.active{border-color:var(--gold)}
+.player strong{display:block;margin:7px}
+.dot{display:inline-block;width:13px;height:13px;
+border-radius:50%;margin-right:5px}
+.red{background:var(--red)}
+.blue{background:var(--blue)}
+#status{text-align:center;color:var(--gold);
+font-weight:bold;margin:16px 0 8px}
+#message{text-align:center;color:#b5c0b2;font-size:13px}
+.board-wrap{width:100%;max-width:520px;margin:auto}
+svg{width:100%;display:block;background:#18251a;border-radius:12px}
+.line{stroke:#d6b96e;stroke-width:3;fill:none}
+.point{stroke:#f4d99a;stroke-width:2;cursor:pointer}
+.empty{fill:#344638}
+.redpiece{fill:var(--red)}
+.bluepiece{fill:var(--blue)}
+.selected{stroke:white;stroke-width:6}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+button,select{flex:1;min-width:110px;padding:12px;
+border:0;border-radius:8px;background:var(--gold);
+color:#17170e;font-weight:bold}
+.secondary{background:#344638;color:white}
+select{background:#344638;color:white}
+footer{text-align:center;color:#819080;font-size:11px;padding:15px}
+</style>
+</head>
+<body>
+
+<header>
+<h1>🐄 CATTLE KINGS V3.1</h1>
+<p>MORABARABA • MEDIUM AI EDITION</p>
+</header>
+
+<main>
+<section class="panel">
+ <div class="controls">
+  <select id="mode" onchange="changeMode()">
+   <option value="ai">Play against AI</option>
+   <option value="two">Two players</option>
+  </select>
+  <select id="difficulty" onchange="changeDifficulty()">
+   <option value="medium">Medium AI</option>
+   <option value="easy">Easy AI</option>
+   <option value="hard">Hard AI</option>
+  </select>
+ </div>
+ <div class="score">
+  <div class="player active" id="redCard">
+   <span class="dot red"></span> RED
+   <strong id="redCount">12 cattle</strong>
+   <small id="redPlaced">0 placed</small>
+   <small id="redName">You</small>
+  </div>
+  <div class="player" id="blueCard">
+   <span class="dot blue"></span> BLUE
+   <strong id="blueCount">12 cattle</strong>
+   <small id="bluePlaced">0 placed</small>
+   <small id="blueName">Computer</small>
+  </div>
+ </div>
+ <div id="status">Red's turn • Place a cow</div>
+ <p id="message">You play Red. Place your first cow.</p>
+</section>
+
+<section class="panel">
+ <div class="board-wrap">
+  <svg viewBox="0 0 600 600" id="board">
+   <g class="line">
+    <rect x="60" y="60" width="480" height="480"/>
+    <rect x="140" y="140" width="320" height="320"/>
+    <rect x="220" y="220" width="160" height="160"/>
+    <path d="M300 60 V220 M540 300 H380
+             M300 540 V380 M60 300 H220"/>
+   </g>
+   <g id="points"></g>
+  </svg>
+ </div>
+</section>
+
+<section class="panel">
+ <div class="controls">
+  <button onclick="newGame()">New Game</button>
+  <button class="secondary" onclick="showRules()">Rules</button>
+ </div>
+ <div class="controls">
+  <button class="secondary" onclick="cancelSelection()">Cancel Selection</button>
+ </div>
+ <p id="captureInfo"></p>
+</section>
+
+<footer>
+Cattle Kings V3.1 • Practice mode • No real-money betting
+</footer>
+</main>
+
+<script>
+const HUMAN="red";
+const AI="blue";
+
+const coords=[
+[60,60],[300,60],[540,60],[540,300],
+[540,540],[300,540],[60,540],[60,300],
+[140,140],[300,140],[460,140],[460,300],
+[460,460],[300,460],[140,460],[140,300],
+[220,220],[300,220],[380,220],[380,300],
+[380,380],[300,380],[220,380],[220,300]
+];
+
+const adjacent=Array.from({length:24},()=>[]);
+function connect(a,b){
+ adjacent[a].push(b);
+ adjacent[b].push(a);
+}
+for(let r=0;r<3;r++){
+ const s=r*8;
+ for(let i=0;i<8;i++)connect(s+i,s+(i+1)%8);
+}
+for(const i of [1,3,5,7]){
+ connect(i,8+i);
+ connect(8+i,16+i);
+}
+
+const mills=[];
+for(let r=0;r<3;r++){
+ const s=r*8;
+ mills.push(
+ [s,s+1,s+2],[s+2,s+3,s+4],
+ [s+4,s+5,s+6],[s+6,s+7,s]
+ );
+}
+for(const i of [1,3,5,7]){
+ mills.push([i,8+i,16+i]);
+}
+
+let board, current, placed, remaining;
+let selected=null, phase="placing";
+let capture=false, gameOver=false;
+let mode="ai", difficulty="medium";
+let aiTimer=null;
+
+const $=id=>document.getElementById(id);
+const opponent=p=>p==="red"?"blue":"red";
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
+function isMill(pos,p,b=board){
+ return mills.some(m=>m.includes(pos)&&m.every(i=>b[i]===p));
+}
+function createsMill(pos,p,b=board){
+ return mills.some(m=>m.includes(pos)&&
+  m.filter(i=>i!==pos).every(i=>b[i]===p));
+}
+function canCapture(pos,p,b=board){
+ const enemy=opponent(p);
+ const pieces=b.map((v,i)=>v===enemy?i:-1).filter(i=>i>=0);
+ const outside=pieces.filter(i=>!isMill(i,enemy,b));
+ return outside.length?outside.includes(pos):pieces.includes(pos);
+}
+function legalMoves(p,b=board,rem=remaining){
+ const moves=[];
+ const flying=rem[p]===3;
+ for(let from=0;from<24;from++){
+  if(b[from]!==p)continue;
+  for(let to=0;to<24;to++){
+   if(b[to]!==null)continue;
+   if(flying||adjacent[from].includes(to)){
+    moves.push({from,to});
+   }
+  }
+ }
+ return moves;
+}
+function draw(){
+ $("points").innerHTML="";
+ coords.forEach(([x,y],i)=>{
+  const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+  c.setAttribute("cx",x);
+  c.setAttribute("cy",y);
+  c.setAttribute("r",board[i]?19:13);
+  c.setAttribute("class","point "+
+   (board[i]==="red"?"redpiece":
+    board[i]==="blue"?"bluepiece":"empty")+
+   (selected===i?" selected":""));
+  c.addEventListener("click",()=>play(i));
+  $("points").appendChild(c);
+ });
+ $("redCount").textContent=remaining.red+" cattle";
+ $("blueCount").textContent=remaining.blue+" cattle";
+ $("redPlaced").textContent=placed.red+" placed";
+ $("bluePlaced").textContent=placed.blue+" placed";
+ $("redName").textContent="Human player";
+ $("blueName").textContent=mode==="ai"?"Computer":"Human player";
+ $("redCard").classList.toggle("active",current==="red"&&!gameOver);
+ $("blueCard").classList.toggle("active",current==="blue"&&!gameOver);
+ $("captureInfo").textContent=capture?
+  "A mill has formed! Capture an opponent's cow.":"";
+ updateStatus();
+}
+function updateStatus(){
+ if(gameOver)return;
+ const name=current==="red"?"Red":"Blue";
+ $("status").textContent=capture?
+  name+" formed a mill! Capture a cow.":
+  name+"'s turn • "+(phase==="placing"?"Place cattle":"Move cattle");
+}
+function play(i){
+ if(gameOver|| (mode==="ai"&&current===AI))return;
+ if(capture){
+  if(!canCapture(i,current)){
+   $("message").textContent="Choose an eligible opponent cow.";
+   return;
+  }
+  removeCow(i);
+  return;
+ }
+ if(phase==="placing"){
+  if(board[i]!==null)return;
+  board[i]=current;
+  placed[current]++;
+  if(placed.red===12&&placed.blue===12)phase="moving";
+  if(createsMill(i,current))capture=true;
+  draw();
+  if(!capture)nextTurn();
+  else draw();
+  return;
+ }
+ if(selected===null){
+  if(board[i]!==current)return;
+  selected=i;draw();return;
+ }
+ if(board[i]===current){
+  selected=i;draw();return;
+ }
+ if(board[i]!==null)return;
+ const move=legalMoves(current).find(m=>m.from===selected&&m.to===i);
+ if(!move)return;
+ makeMove(move,current);
+}
+function removeCow(i){
+ board[i]=null;
+ remaining[opponent(current)]--;
+ capture=false;
+ selected=null;
+ checkWin();
+ draw();
+ if(!gameOver)nextTurn();
+}
+function makeMove(move,p){
+ board[move.from]=null;
+ board[move.to]=p;
+ selected=null;
+ if(createsMill(move.to,p))capture=true;
+ draw();
+ if(!capture)nextTurn();
+}
+function nextTurn(){
+ selected=null;
+ current=opponent(current);
+ if(phase==="moving"&&remaining[current]>=3&&legalMoves(current).length===0){
+  finish(opponent(current)+" wins! "+current+" has no legal moves.");
+  return;
+ }
+ draw();
+ if(mode==="ai"&&current===AI){
+  scheduleAI();
+ }else{
+  $("message").textContent=current==="red"?
+   "Your turn. Make your move.":"Blue player's turn.";
+ }
+}
+function checkWin(){
+ if(phase==="moving"&&remaining[opponent(current)]<3){
+  finish(current.toUpperCase()+" WINS! 🏆");
+ }
+}
+function finish(message){
+ gameOver=true;
+ clearTimeout(aiTimer);
+ $("status").textContent=message;
+ $("message").textContent="Game over. Start a new game to play again.";
+ draw();
+ $("status").textContent=message;
+}
+function scorePlacement(pos,p){
+ let score=Math.random()*3;
+ const b=board.slice();
+ b[pos]=p;
+ for(const m of mills){
+  if(m.includes(pos)){
+   const own=m.filter(i=>b[i]===p).length;
+   const enemy=m.filter(i=>b[i]===opponent(p)).length;
+   if(own===3)score+=120;
+   else if(own===2&&enemy===0)score+=12;
+   if(p===AI&&own===2)score+=30;
+  }
+ }
+ if(p===AI){
+  const humanThreat=mills.some(m=>
+   m.includes(pos)&&m.filter(i=>board[i]===HUMAN).length===2&&
+   m.filter(i=>board[i]===null).length===1
+  );
+  if(humanThreat)score+=75;
+ }
+ if([9,11,13,15,17,19,21,23].includes(pos))score+=3;
+ return score;
+}
+function choosePlacement(p){
+ const options=board.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+ return options.sort((a,b)=>scorePlacement(b,p)-scorePlacement(a,p))[0];
+}
+function scoreMove(move,p){
+ const b=board.slice();
+ b[move.from]=null;
+ b[move.to]=p;
+ let score=Math.random()*3;
+ if(createsMill(move.to,p,b))score+=130;
+ if(createsMill(move.to,HUMAN,b))score+=35;
+ const opponentThreat=mills.some(m=>
+  m.includes(move.to)&&
+  m.filter(i=>board[i]===HUMAN).length===2&&
+  m.filter(i=>board[i]===null).length===1
+ );
+ if(opponentThreat)score+=80;
+ score+=adjacent[move.to].filter(i=>b[i]===null).length*2;
+ return score;
+}
+function chooseMove(p){
+ const moves=legalMoves(p);
+ if(!moves.length)return null;
+ return moves.sort((a,b)=>scoreMove(b,p)-scoreMove(a,p))[0];
+}
+function chooseCapture(p){
+ const enemies=board.map((v,i)=>v===opponent(p)?i:-1).filter(i=>i>=0);
+ const outside=enemies.filter(i=>!isMill(i,opponent(p)));
+ const pool=outside.length?outside:enemies;
+ return pool.sort((a,b)=>{
+  let sa=adjacent[a].filter(i=>board[i]===null).length;
+  let sb=adjacent[b].filter(i=>board[i]===null).length;
+  return sb-sa;
+ })[0];
+}
+function scheduleAI(){
+ clearTimeout(aiTimer);
+ $("message").textContent="Computer is thinking...";
+ aiTimer=setTimeout(aiTurn,650);
+}
+async function aiTurn(){
+ if(gameOver||mode!=="ai"||current!==AI)return;
+ if(capture){
+  const target=chooseCapture(AI);
+  if(target!==undefined)removeCow(target);
+  return;
+ }
+ if(phase==="placing"){
+  let pos=choosePlacement(AI);
+  if(difficulty==="easy"&&Math.random()<0.45){
+   const options=board.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+   pos=options[Math.floor(Math.random()*options.length)];
+  }
+  if(pos===undefined)return;
+  board[pos]=AI;
+  placed[AI]++;
+  if(placed.red===12&&placed.blue===12)phase="moving";
+  if(createsMill(pos,AI))capture=true;
+  draw();
+  if(capture){
+   await sleep(450);
+   aiTurn();
+  }else nextTurn();
+  return;
+ }
+ const move=chooseMove(AI);
+ if(!move){
+  finish("Red wins! Computer has no legal moves.");
+  return;
+ }
+ if(difficulty==="easy"&&Math.random()<0.3){
+  const moves=legalMoves(AI);
+  if(moves.length)makeAIMove(moves[Math.floor(Math.random()*moves.length)]);
+  else makeAIMove(move);
+ }else{
+  makeAIMove(move);
+ }
+}
+function makeAIMove(move){
+ board[move.from]=null;
+ board[move.to]=AI;
+ selected=null;
+ if(createsMill(move.to,AI))capture=true;
+ draw();
+ if(capture){
+  aiTimer=setTimeout(aiTurn,450);
+ }else nextTurn();
+}
+function newGame(){
+ clearTimeout(aiTimer);
+ board=Array(24).fill(null);
+ current="red";
+ placed={red:0,blue:0};
+ remaining={red:12,blue:12};
+ selected=null;phase="placing";
+ capture=false;gameOver=false;
+ $("message").textContent="You play Red. Place your first cow.";
+ draw();
+}
+function changeMode(){
+ mode=$("mode").value;
+ newGame();
+}
+function changeDifficulty(){
+ difficulty=$("difficulty").value;
+}
+function cancelSelection(){
+ selected=null;draw();
+}
+function showRules(){
+ alert(
+ "MORABARABA RULES\n\n"+
+ "1. Each player has 12 cattle.\n"+
+ "2. Place cattle alternately.\n"+
+ "3. Form a mill using three cattle in a row.\n"+
+ "4. Capture an eligible opponent cow when you form a mill.\n"+
+ "5. After placing, move cattle to connected empty positions.\n"+
+ "6. With three cattle remaining, you may fly to any empty position.\n"+
+ "7. Reduce your opponent to two cattle or block all their moves to win.\n\n"+
+ "AI MODE: You play Red. Computer plays Blue."
+ );
+}
+newGame();
+</script>
+</body>
+  </html>
+  
