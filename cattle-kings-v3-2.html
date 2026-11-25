@@ -1,0 +1,612 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101710">
+<title>Cattle Kings V3.2</title>
+<style>
+:root{
+ --bg:#101710;--panel:#1c291e;--gold:#e8b84f;
+ --red:#e85c54;--blue:#64b9ed;--white:#f7f4e9;
+}
+*{box-sizing:border-box}
+body{
+ margin:0;background:var(--bg);color:var(--white);
+ font-family:Arial,sans-serif;
+}
+header{text-align:center;padding:20px 10px}
+h1{color:var(--gold);margin:0}
+header p{color:#a8b4a4;font-size:13px}
+main{max-width:620px;margin:auto;padding:12px}
+.panel{
+ background:var(--panel);border:1px solid #39483a;
+ border-radius:14px;padding:14px;margin-bottom:13px
+}
+input,select{
+ width:100%;padding:12px;border-radius:8px;
+ border:1px solid #526452;background:#253328;
+ color:white;margin:5px 0 10px;font-size:15px
+}
+label{font-size:12px;color:#c3cfbf}
+.score{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.player{
+ background:#253328;padding:12px;text-align:center;
+ border:2px solid transparent;border-radius:10px
+}
+.player.active{border-color:var(--gold)}
+.player strong{display:block;margin:7px}
+.dot{
+ display:inline-block;width:13px;height:13px;
+ border-radius:50%;margin-right:5px
+}
+.red{background:var(--red)}
+.blue{background:var(--blue)}
+#status{
+ color:var(--gold);text-align:center;
+ font-weight:bold;margin:16px 0 8px
+}
+#message{text-align:center;color:#b5c0b2;font-size:13px}
+.board-wrap{width:100%;max-width:520px;margin:auto}
+svg{width:100%;display:block;background:#18251a;border-radius:12px}
+.line{stroke:#d6b96e;stroke-width:3;fill:none}
+.point{stroke:#f4d99a;stroke-width:2;cursor:pointer}
+.empty{fill:#344638}
+.redpiece{fill:var(--red)}
+.bluepiece{fill:var(--blue)}
+.selected{stroke:white;stroke-width:6}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+button{
+ flex:1;min-width:100px;padding:12px;border:0;
+ border-radius:8px;background:var(--gold);
+ color:#17170e;font-weight:bold;cursor:pointer
+}
+.secondary{background:#344638;color:white}
+.stats{
+ display:grid;grid-template-columns:repeat(3,1fr);
+ gap:8px;text-align:center
+}
+.stat{background:#253328;padding:12px;border-radius:9px}
+.stat strong{display:block;color:var(--gold);font-size:20px}
+.stat small{color:#b5c0b2}
+footer{text-align:center;color:#819080;font-size:11px;padding:15px}
+</style>
+</head>
+
+<body>
+<header>
+<h1>🐄 CATTLE KINGS V3.2</h1>
+<p>AFRICAN STRATEGY GAMING • ADVANCED EDITION</p>
+</header>
+
+<main>
+
+<section class="panel">
+ <label for="playerName">PLAYER NAME</label>
+ <input id="playerName" maxlength="20" value="Player 1"
+ placeholder="Enter your player name">
+
+ <label for="mode">GAME MODE</label>
+ <select id="mode" onchange="newGame()">
+  <option value="ai">Human vs Computer</option>
+  <option value="two">Two Players</option>
+ </select>
+
+ <label for="difficulty">AI DIFFICULTY</label>
+ <select id="difficulty">
+  <option value="medium">Medium</option>
+  <option value="hard">Hard</option>
+  <option value="easy">Easy</option>
+ </select>
+
+ <div class="controls">
+  <button onclick="saveProfile()">Save Profile</button>
+  <button class="secondary" onclick="newGame()">New Game</button>
+ </div>
+</section>
+
+<section class="panel">
+ <div class="stats">
+  <div class="stat">
+   <strong id="wins">0</strong>
+   <small>Wins</small>
+  </div>
+  <div class="stat">
+   <strong id="losses">0</strong>
+   <small>Losses</small>
+  </div>
+  <div class="stat">
+   <strong id="played">0</strong>
+   <small>Games</small>
+  </div>
+ </div>
+</section>
+
+<section class="panel">
+ <div class="score">
+  <div class="player active" id="redCard">
+   <span class="dot red"></span> RED
+   <strong id="redCount">12 cattle</strong>
+   <small id="redPlaced">0 placed</small>
+   <small id="redName">Player 1</small>
+  </div>
+  <div class="player" id="blueCard">
+   <span class="dot blue"></span> BLUE
+   <strong id="blueCount">12 cattle</strong>
+   <small id="bluePlaced">0 placed</small>
+   <small id="blueName">Computer</small>
+  </div>
+ </div>
+
+ <div id="status">Red's turn • Place cattle</div>
+ <p id="message">Welcome to Cattle Kings!</p>
+</section>
+
+<section class="panel">
+ <div class="board-wrap">
+  <svg viewBox="0 0 600 600" id="board">
+   <g class="line">
+    <rect x="60" y="60" width="480" height="480"/>
+    <rect x="140" y="140" width="320" height="320"/>
+    <rect x="220" y="220" width="160" height="160"/>
+    <path d="M300 60 V220 M540 300 H380
+             M300 540 V380 M60 300 H220"/>
+   </g>
+   <g id="points"></g>
+  </svg>
+ </div>
+</section>
+
+<section class="panel">
+ <h3>🏆 Tournament scoreboard</h3>
+ <div class="stats">
+  <div class="stat">
+   <strong id="round">1</strong>
+   <small>Round</small>
+  </div>
+  <div class="stat">
+   <strong id="seriesRed">0</strong>
+   <small>Red points</small>
+  </div>
+  <div class="stat">
+   <strong id="seriesBlue">0</strong>
+   <small>Blue points</small>
+  </div>
+ </div>
+ <p id="tournamentMessage">First to 2 wins takes the series.</p>
+ <div class="controls">
+  <button class="secondary" onclick="resetTournament()">Reset Tournament</button>
+ </div>
+</section>
+
+<section class="panel">
+ <div class="controls">
+  <button onclick="newGame()">New Game</button>
+  <button class="secondary" onclick="showRules()">Rules</button>
+ </div>
+ <div class="controls">
+  <button class="secondary" onclick="cancelSelection()">Cancel Selection</button>
+ </div>
+</section>
+
+<footer>
+Cattle Kings V3.2 • Practice mode only • No real-money betting
+</footer>
+</main>
+
+<script>
+const coords=[
+[60,60],[300,60],[540,60],[540,300],
+[540,540],[300,540],[60,540],[60,300],
+[140,140],[300,140],[460,140],[460,300],
+[460,460],[300,460],[140,460],[140,300],
+[220,220],[300,220],[380,220],[380,300],
+[380,380],[300,380],[220,380],[220,300]
+];
+
+const adjacent=Array.from({length:24},()=>[]);
+function connect(a,b){
+ adjacent[a].push(b);
+ adjacent[b].push(a);
+}
+for(let r=0;r<3;r++){
+ const s=r*8;
+ for(let i=0;i<8;i++)connect(s+i,s+(i+1)%8);
+}
+for(const i of [1,3,5,7]){
+ connect(i,8+i);
+ connect(8+i,16+i);
+}
+
+const mills=[];
+for(let r=0;r<3;r++){
+ const s=r*8;
+ mills.push(
+ [s,s+1,s+2],[s+2,s+3,s+4],
+ [s+4,s+5,s+6],[s+6,s+7,s]
+ );
+}
+for(const i of [1,3,5,7]){
+ mills.push([i,8+i,16+i]);
+}
+
+const $=id=>document.getElementById(id);
+const opponent=p=>p==="red"?"blue":"red";
+
+let board=[];
+let current="red";
+let placed={red:0,blue:0};
+let remaining={red:12,blue:12};
+let selected=null;
+let phase="placing";
+let capture=false;
+let gameOver=false;
+let aiTimer=null;
+let mode="ai";
+let series={red:0,blue:0};
+let round=1;
+
+let profile=loadData("ck32profile",{name:"Player 1"});
+let stats=loadData("ck32stats",{wins:0,losses:0,played:0});
+let savedSeries=loadData("ck32series",{red:0,blue:0});
+
+series=savedSeries;
+
+function loadData(key,fallback){
+ try{
+  return JSON.parse(localStorage.getItem(key))||fallback;
+ }catch(e){return fallback}
+}
+function saveData(key,value){
+ try{localStorage.setItem(key,JSON.stringify(value))}
+ catch(e){}
+}
+function saveProfile(){
+ const name=$("playerName").value.trim().slice(0,20);
+ if(!name){
+  alert("Please enter a player name.");
+  return;
+ }
+ profile.name=name;
+ saveData("ck32profile",profile);
+ $("message").textContent="Profile saved: "+name;
+ draw();
+}
+function updateStats(){
+ $("wins").textContent=stats.wins;
+ $("losses").textContent=stats.losses;
+ $("played").textContent=stats.played;
+}
+function isMill(pos,p,b=board){
+ return mills.some(m=>
+  m.includes(pos)&&m.every(i=>b[i]===p)
+ );
+}
+function createsMill(pos,p,b=board){
+ return mills.some(m=>
+  m.includes(pos)&&
+  m.filter(i=>i!==pos).every(i=>b[i]===p)
+ );
+}
+function canCapture(pos,p,b=board){
+ const enemy=opponent(p);
+ const pieces=b.map((v,i)=>v===enemy?i:-1).filter(i=>i>=0);
+ const outside=pieces.filter(i=>!isMill(i,enemy,b));
+ return outside.length?outside.includes(pos):pieces.includes(pos);
+}
+function legalMoves(p,b=board,rem=remaining){
+ const moves=[];
+ for(let from=0;from<24;from++){
+  if(b[from]!==p)continue;
+  for(let to=0;to<24;to++){
+   if(b[to]!==null)continue;
+   if(rem[p]===3||adjacent[from].includes(to)){
+    moves.push({from,to});
+   }
+  }
+ }
+ return moves;
+}
+function draw(){
+ $("points").innerHTML="";
+ coords.forEach(([x,y],i)=>{
+  const c=document.createElementNS(
+   "http://www.w3.org/2000/svg","circle"
+  );
+  c.setAttribute("cx",x);
+  c.setAttribute("cy",y);
+  c.setAttribute("r",board[i]?19:13);
+  c.setAttribute("class","point "+
+   (board[i]==="red"?"redpiece":
+    board[i]==="blue"?"bluepiece":"empty")+
+   (selected===i?" selected":""));
+  c.setAttribute("tabindex","0");
+  c.setAttribute("role","button");
+  c.addEventListener("click",()=>play(i));
+  c.addEventListener("keydown",e=>{
+   if(e.key==="Enter"||e.key===" "){
+    e.preventDefault();play(i);
+   }
+  });
+  $("points").appendChild(c);
+ });
+ $("redCount").textContent=remaining.red+" cattle";
+ $("blueCount").textContent=remaining.blue+" cattle";
+ $("redPlaced").textContent=placed.red+" placed";
+ $("bluePlaced").textContent=placed.blue+" placed";
+ $("redName").textContent=profile.name;
+ $("blueName").textContent=mode==="ai"?"Computer":"Player 2";
+ $("redCard").classList.toggle("active",current==="red"&&!gameOver);
+ $("blueCard").classList.toggle("active",current==="blue"&&!gameOver);
+ $("round").textContent=round;
+ $("seriesRed").textContent=series.red;
+ $("seriesBlue").textContent=series.blue;
+ updateStats();
+ updateStatus();
+}
+function updateStatus(){
+ if(gameOver)return;
+ const name=current==="red"?
+  profile.name:(mode==="ai"?"Computer":"Player 2");
+ $("status").textContent=capture?
+  name+" formed a mill! Capture a cow.":
+  name+"'s turn • "+(phase==="placing"?"Place cattle":"Move cattle");
+}
+function play(i){
+ if(gameOver||(mode==="ai"&&current==="blue"))return;
+
+ if(capture){
+  if(!canCapture(i,current)){
+   $("message").textContent="Choose an eligible opponent cow.";
+   return;
+  }
+  removeCow(i);
+  return;
+ }
+
+ if(phase==="placing"){
+  if(board[i]!==null)return;
+  board[i]=current;
+  placed[current]++;
+  if(placed.red===12&&placed.blue===12)phase="moving";
+  if(createsMill(i,current))capture=true;
+  draw();
+  if(!capture)nextTurn();
+  return;
+ }
+
+ if(selected===null){
+  if(board[i]!==current)return;
+  selected=i;draw();return;
+ }
+ if(board[i]===current){
+  selected=i;draw();return;
+ }
+ if(board[i]!==null)return;
+
+ const move=legalMoves(current).find(m=>
+  m.from===selected&&m.to===i
+ );
+ if(!move)return;
+
+ makeMove(move,current);
+}
+function removeCow(i){
+ board[i]=null;
+ remaining[opponent(current)]--;
+ capture=false;
+ selected=null;
+ draw();
+ if(checkWin())return;
+ nextTurn();
+}
+function makeMove(move,p){
+ board[move.from]=null;
+ board[move.to]=p;
+ selected=null;
+ capture=createsMill(move.to,p);
+ draw();
+ if(!capture)nextTurn();
+}
+function nextTurn(){
+ selected=null;
+ current=opponent(current);
+
+ if(phase==="moving"&&remaining[current]>=3&&
+    legalMoves(current).length===0){
+  finish(opponent(current));
+  return;
+ }
+ draw();
+
+ if(mode==="ai"&&current==="blue"){
+  $("message").textContent="Computer is thinking...";
+  aiTimer=setTimeout(aiTurn,600);
+ }else{
+  $("message").textContent=current==="red"?
+   "Your turn. Make your move.":"Player 2's turn.";
+ }
+}
+function checkWin(){
+ if(phase==="moving"&&remaining[opponent(current)]<3){
+  finish(current);
+  return true;
+ }
+ return false;
+}
+function finish(winner){
+ if(gameOver)return;
+ gameOver=true;
+ clearTimeout(aiTimer);
+
+ $("status").textContent=winner.toUpperCase()+" WINS! 🏆";
+ $("message").textContent="Game complete!";
+
+ stats.played++;
+ if(winner==="red")stats.wins++;
+ else if(mode==="ai")stats.losses++;
+ saveData("ck32stats",stats);
+
+ series[winner]++;
+ saveData("ck32series",series);
+
+ if(series[winner]>=2){
+  $("tournamentMessage").textContent=
+   (winner==="red"?profile.name:
+    mode==="ai"?"Computer":"Player 2")+
+   " wins the tournament!";
+ }else{
+  $("tournamentMessage").textContent=
+   "Next round! First to 2 wins takes the series.";
+  round++;
+ }
+ draw();
+ $("status").textContent=winner.toUpperCase()+" WINS! 🏆";
+}
+function resetTournament(){
+ series={red:0,blue:0};
+ round=1;
+ saveData("ck32series",series);
+ $("tournamentMessage").textContent="Tournament reset.";
+ draw();
+}
+function placementScore(pos,p){
+ let score=Math.random()*2;
+ const b=board.slice();
+ b[pos]=p;
+ for(const m of mills){
+  if(!m.includes(pos))continue;
+  const own=m.filter(i=>b[i]===p).length;
+  const enemy=m.filter(i=>b[i]===opponent(p)).length;
+  if(own===3)score+=150;
+  if(own===2&&enemy===0)score+=25;
+ }
+ if(p==="blue"){
+  for(const m of mills){
+   if(m.includes(pos)&&
+      m.filter(i=>board[i]==="red").length===2&&
+      m.filter(i=>board[i]===null).length===1){
+    score+=100;
+   }
+  }
+ }
+ if([1,3,5,7,9,11,13,15,17,19,21,23].includes(pos))score+=3;
+ return score;
+}
+function choosePlacement(p){
+ const options=board.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+ const level=$("difficulty").value;
+ if(level==="easy"&&Math.random()<0.45){
+  return options[Math.floor(Math.random()*options.length)];
+ }
+ return options.sort((a,b)=>
+  placementScore(b,p)-placementScore(a,p)
+ )[0];
+}
+function moveScore(move,p){
+ const b=board.slice();
+ b[move.from]=null;
+ b[move.to]=p;
+ let score=Math.random()*2;
+ if(createsMill(move.to,p,b))score+=160;
+ if(createsMill(move.to,opponent(p),b))score+=45;
+ score+=adjacent[move.to].filter(i=>b[i]===null).length*3;
+ const level=$("difficulty").value;
+ if(level==="hard"){
+  score+=adjacent[move.to].filter(i=>b[i]===opponent(p)).length*2;
+ }
+ return score;
+}
+function chooseMove(p){
+ const moves=legalMoves(p);
+ if(!moves.length)return null;
+ const level=$("difficulty").value;
+ if(level==="easy"&&Math.random()<0.35){
+  return moves[Math.floor(Math.random()*moves.length)];
+ }
+ return moves.sort((a,b)=>moveScore(b,p)-moveScore(a,p))[0];
+}
+function chooseCapture(p){
+ const enemy=opponent(p);
+ const pieces=board.map((v,i)=>v===enemy?i:-1).filter(i=>i>=0);
+ const outside=pieces.filter(i=>!isMill(i,enemy));
+ const pool=outside.length?outside:pieces;
+ return pool.sort((a,b)=>
+  adjacent[b].filter(i=>board[i]===null).length-
+  adjacent[a].filter(i=>board[i]===null).length
+ )[0];
+}
+function aiTurn(){
+ if(gameOver||mode!=="ai"||current!=="blue")return;
+
+ if(capture){
+  const target=chooseCapture("blue");
+  if(target!==undefined)removeCow(target);
+  return;
+ }
+
+ if(phase==="placing"){
+  const pos=choosePlacement("blue");
+  if(pos===undefined)return;
+  board[pos]="blue";
+  placed.blue++;
+  if(placed.red===12&&placed.blue===12)phase="moving";
+  capture=createsMill(pos,"blue");
+  draw();
+  if(capture){
+   aiTimer=setTimeout(aiTurn,450);
+  }else nextTurn();
+  return;
+ }
+
+ const move=chooseMove("blue");
+ if(!move){
+  finish("red");
+  return;
+ }
+ board[move.from]=null;
+ board[move.to]="blue";
+ capture=createsMill(move.to,"blue");
+ draw();
+ if(capture){
+  aiTimer=setTimeout(aiTurn,450);
+ }else nextTurn();
+}
+function newGame(){
+ clearTimeout(aiTimer);
+ mode=$("mode").value;
+ board=Array(24).fill(null);
+ current="red";
+ placed={red:0,blue:0};
+ remaining={red:12,blue:12};
+ selected=null;
+ phase="placing";
+ capture=false;
+ gameOver=false;
+ $("message").textContent="Red starts. Place your first cow.";
+ draw();
+}
+function cancelSelection(){
+ selected=null;draw();
+}
+function showRules(){
+ alert(
+ "CATTLE KINGS V3.2 RULES\n\n"+
+ "1. Each player starts with 12 cattle.\n"+
+ "2. Place cattle alternately.\n"+
+ "3. Form a mill using three cattle in a row.\n"+
+ "4. Capture an eligible opponent cow when a mill forms.\n"+
+ "5. After placing, move to connected empty positions.\n"+
+ "6. With three cattle, you may fly to any empty position.\n"+
+ "7. Reduce your opponent to two cattle or block all moves to win.\n\n"+
+ "Tournament: First player to win two rounds wins the series."
+ );
+}
+
+$("playerName").value=profile.name;
+newGame();
+</script>
+</body>
+  </html>
+  
